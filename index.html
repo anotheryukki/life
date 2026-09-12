@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$LIFE — Life is a game</title>
+<meta name="description" content="$LIFE on Robinhood Chain. Life is a game. Scroll to play.">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Titan+One&family=Chakra+Petch:wght@500;600;700&family=Rubik:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --lime:#a8ff1e;
+    --lime-deep:#5f9a12;
+    --sky:#5fa8e8;
+    --ink:#0b1424;
+    --glass:rgba(9,18,36,.62);
+    --glass-edge:rgba(255,255,255,.14);
+    --cloud:#f4f8ff;
+    --mute:rgba(244,248,255,.7);
+    --display:'Titan One', 'Arial Black', Impact, sans-serif;
+    --hud:'Chakra Petch', 'Segoe UI', sans-serif;
+    --body:'Rubik', 'Segoe UI', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:auto}
+  body{
+    margin:0; background:var(--sky); color:var(--cloud);
+    font-family:var(--body); line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  a{color:inherit}
+  ::selection{background:var(--lime); color:var(--ink)}
+
+  /* ---------- the scroll runway: the footage plays across it, the stage stays pinned ---------- */
+  .scroller{position:relative; height:800vh; height:800svh}
+  .stage{
+    position:sticky; top:0; height:100vh; height:100svh; overflow:hidden;
+    background:var(--sky) url(assets/poster.jpg) center/cover no-repeat;
+  }
+  @media (orientation: portrait){ .stage{background-image:url(assets/poster-portrait.jpg)} }
+  .stage video{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center;
+    opacity:0; transition:opacity .6s ease;
+  }
+  .stage video.ready{opacity:1}
+  .stage::after{
+    content:""; position:absolute; inset:0; pointer-events:none; z-index:1;
+    background:linear-gradient(to bottom, rgba(0,0,0,0) 70%, rgba(6,12,24,.35) 100%);
+  }
+
+  /* ---------- scenes: each lives at a spot the footage leaves empty during its seconds ---------- */
+  .scene{
+    position:absolute; inset:0; z-index:2;
+    display:grid; grid-template-columns:minmax(0,1fr); justify-items:center;
+    padding:0 20px;
+    opacity:0; visibility:hidden; transform:translateY(16px);
+    transition:opacity .4s ease, transform .4s ease, visibility 0s linear .4s;
+    pointer-events:none;
+  }
+  .scene.on{
+    opacity:1; visibility:visible; transform:none; pointer-events:auto;
+    transition:opacity .5s cubic-bezier(.2,.7,.2,1), transform .5s cubic-bezier(.2,.7,.2,1), visibility 0s;
+  }
+  #hero{align-content:start; padding-top:18px}     /* the hint rides on the HUD line, between the wordmark and the score */
+  #hero .logo, #players .grid{display:none}
+  #ca{align-content:end; padding-bottom:6vh}
+  #chart{align-content:start; padding-top:7vh}
+  #quests{align-content:start; padding-top:6vh}
+  #players{align-content:start; padding-top:10vh; text-align:center}
+  @media (max-height: 700px){
+    #ca{padding-bottom:3vh}
+    #chart, #quests{padding-top:3vh}
+    #players{padding-top:5vh}
+  }
+
+  /* ---------- HUD ---------- */
+  .hud{
+    position:fixed; z-index:5; left:0; right:0; top:0;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:14px clamp(16px,3vw,32px);
+    font-family:var(--hud); font-weight:600; font-size:.85rem; letter-spacing:.04em; text-transform:uppercase;
+    pointer-events:none;
+  }
+  .hud > *{pointer-events:auto}
+  .wordmark{
+    font-family:var(--display); font-size:1.35rem; letter-spacing:.01em; text-transform:none;
+    color:var(--lime); text-decoration:none;
+    -webkit-text-stroke:1px #fff; paint-order:stroke fill;
+    text-shadow:0 2px 0 var(--lime-deep), 0 5px 12px rgba(0,0,0,.35);
+  }
+  .score{
+    display:flex; align-items:center; gap:10px;
+    background:var(--glass); border:1px solid var(--glass-edge); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border-radius:999px; padding:8px 14px 8px 12px; color:var(--cloud);
+  }
+  .score .dot{width:8px; height:8px; border-radius:50%; background:var(--lime); box-shadow:0 0 0 0 rgba(168,255,30,.6); animation:ping 1.6s infinite}
+  .score .lbl{color:var(--mute); font-size:.72rem}
+  .score .val{font-weight:700; font-variant-numeric:tabular-nums}
+  @keyframes ping{0%{box-shadow:0 0 0 0 rgba(168,255,30,.6)}70%{box-shadow:0 0 0 8px rgba(168,255,30,0)}100%{box-shadow:0 0 0 0 rgba(168,255,30,0)}}
+
+  .levels{
+    position:fixed; z-index:5; left:0; right:0; bottom:0;
+    display:flex; gap:6px; padding:0 clamp(16px,3vw,32px) 12px;
+    font-family:var(--hud); font-size:.66rem; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--mute);
+    pointer-events:none;
+  }
+  .levels span{flex:1; text-align:left; position:relative; padding-top:8px}
+  .levels span::before{content:""; position:absolute; left:0; right:0; top:0; height:3px; background:rgba(255,255,255,.28); border-radius:2px}
+  .levels span::after{content:""; position:absolute; left:0; top:0; height:3px; width:calc(var(--p,0)*100%); background:var(--lime); border-radius:2px; box-shadow:0 0 8px rgba(168,255,30,.6)}
+  .levels span.done, .levels span.live{color:var(--cloud)}
+  .levels span.live{text-shadow:0 0 10px rgba(168,255,30,.5)}
+
+  /* ---------- cards ---------- */
+  .card{
+    width:100%; max-width:720px;
+    background:var(--glass); border:1px solid var(--glass-edge);
+    backdrop-filter:blur(16px) saturate(1.2); -webkit-backdrop-filter:blur(16px) saturate(1.2);
+    border-radius:28px; padding:clamp(22px,4vw,40px);
+    box-shadow:0 30px 60px -30px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.12);
+  }
+  .eyebrow{
+    margin:0 0 10px; font-family:var(--hud); font-weight:700; font-size:.74rem; letter-spacing:.18em; text-transform:uppercase; color:var(--lime);
+  }
+  h2{
+    margin:0 0 12px; font-family:var(--display); font-weight:400; line-height:.98;
+    font-size:clamp(2.1rem, 6.4vw, 3.9rem); color:var(--lime);
+    -webkit-text-stroke:1.5px #fff; paint-order:stroke fill;
+    text-shadow:0 3px 0 var(--lime-deep), 0 8px 18px rgba(0,0,0,.35);
+    letter-spacing:.01em;
+  }
+  .lede{margin:0 0 22px; color:var(--mute); font-size:1.02rem; max-width:52ch}
+
+  /* hero */
+  #hero .hint{
+    display:flex; flex-direction:row; align-items:center; gap:12px; height:36px;
+    font-family:var(--hud); font-weight:700; font-size:.78rem; letter-spacing:.2em; text-transform:uppercase; color:var(--cloud);
+    text-shadow:0 1px 8px rgba(0,0,0,.4);
+    animation:bob 1.8s ease-in-out infinite;
+  }
+  #hero .hint .key{
+    width:18px; height:28px; border:2px solid rgba(255,255,255,.85); border-radius:10px; position:relative; order:2;
+  }
+  #hero .hint .key::after{content:""; position:absolute; left:50%; top:5px; width:3px; height:6px; margin-left:-1.5px; border-radius:2px; background:var(--lime); animation:wheel 1.8s ease-in-out infinite}
+  @keyframes wheel{0%{transform:translateY(0);opacity:1}70%{transform:translateY(9px);opacity:0}100%{transform:translateY(0);opacity:0}}
+  @media (max-height: 700px){ #hero .hint{font-size:.7rem} }
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+
+  /* CA */
+  .ca-box{display:flex; flex-wrap:wrap; align-items:stretch; gap:10px; margin:6px 0 14px}
+  .ca-addr{
+    flex:1 1 340px; min-width:0;
+    font-family:var(--hud); font-weight:600; font-size:clamp(.92rem, 2.3vw, 1.18rem); letter-spacing:.02em;
+    background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.1); border-radius:16px;
+    padding:14px 16px; word-break:break-all; line-height:1.35; color:var(--cloud);
+  }
+  .btn{
+    appearance:none; border:0; cursor:pointer; text-decoration:none; text-align:center;
+    font-family:var(--hud); font-weight:700; font-size:.92rem; letter-spacing:.06em; text-transform:uppercase;
+    border-radius:16px; padding:14px 22px; color:var(--ink); background:var(--lime);
+    box-shadow:0 4px 0 var(--lime-deep), 0 10px 20px -8px rgba(168,255,30,.6);
+    transition:transform .12s ease, box-shadow .12s ease, background .2s;
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn:hover{transform:translateY(-1px)}
+  .btn:active{transform:translateY(3px); box-shadow:0 1px 0 var(--lime-deep)}
+  .btn.copied{background:#fff}
+  .meta{display:flex; flex-wrap:wrap; gap:8px 18px; font-family:var(--hud); font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--mute)}
+  .meta b{color:var(--cloud); font-weight:600}
+  .meta a{color:var(--lime); text-decoration:none; font-weight:700}
+  .meta a:hover{text-decoration:underline}
+
+  /* chart */
+  #chart .card{max-width:980px; padding:clamp(16px,2.5vw,26px)}
+  #chart .head{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:end; gap:8px 20px; padding:6px 6px 14px}
+  #chart .head h2{margin:0}
+  .chart-frame{
+    position:relative; width:100%; aspect-ratio:16/10; min-height:min(380px, 52vh); max-height:min(560px, 62vh);
+    border-radius:18px; overflow:hidden; background:#0b0f18; border:1px solid rgba(255,255,255,.08);
+  }
+  .chart-frame iframe{position:absolute; inset:0; width:100%; height:100%; border:0}
+  .chart-frame .fallback{position:absolute; inset:0; display:grid; place-items:center; color:var(--mute); font-family:var(--hud); font-size:.9rem; text-align:center; padding:20px}
+  .chart-frame iframe[src] + .fallback{display:none}
+
+  /* achievements */
+  .ach{list-style:none; margin:0; padding:0; display:grid; gap:12px}
+  .ach li{
+    position:relative; display:grid; grid-template-columns:auto 1fr auto; gap:16px; align-items:center;
+    background:rgba(0,0,0,.32); border:1px solid rgba(255,255,255,.1); border-radius:18px; padding:14px 16px;
+    transition:background .4s, border-color .4s;
+  }
+  .ach .badge{
+    width:52px; height:52px; border-radius:14px; display:grid; place-items:center; font-size:1.5rem;
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); filter:grayscale(1) opacity(.5);
+    transition:filter .4s, background .4s;
+  }
+  .ach .mc{font-family:var(--hud); font-weight:700; font-size:.78rem; letter-spacing:.16em; text-transform:uppercase; color:var(--lime)}
+  .ach .txt{margin-top:2px; font-size:1rem; line-height:1.4; color:var(--cloud); position:relative; display:inline}
+  .ach .txt::after{
+    content:""; position:absolute; left:-2px; right:-2px; top:55%; height:3px; border-radius:2px; background:var(--lime);
+    transform:scaleX(0); transform-origin:left center; transition:transform .55s cubic-bezier(.2,.8,.2,1) .15s;
+    box-shadow:0 0 10px rgba(168,255,30,.7);
+  }
+  .ach .state{
+    font-family:var(--hud); font-weight:700; font-size:.68rem; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--mute); border:1px solid rgba(255,255,255,.18); border-radius:999px; padding:6px 10px; white-space:nowrap;
+  }
+  .ach li.unlocked{background:rgba(168,255,30,.1); border-color:rgba(168,255,30,.45)}
+  .ach li.unlocked .badge{filter:none; background:var(--lime); border-color:#fff; box-shadow:0 4px 0 var(--lime-deep)}
+  .ach li.unlocked .txt{color:var(--mute)}
+  .ach li.unlocked .txt::after{transform:scaleX(1)}
+  .ach li.unlocked .state{color:var(--ink); background:var(--lime); border-color:var(--lime)}
+  .ach li.unlocked::before{
+    content:"UNLOCKED"; position:absolute; right:14px; top:-11px; transform:rotate(-4deg);
+    font-family:var(--display); font-size:.9rem; letter-spacing:.06em; color:var(--lime);
+    -webkit-text-stroke:.8px #fff; paint-order:stroke fill; text-shadow:0 2px 0 var(--lime-deep);
+  }
+  .prog{margin-top:20px}
+  .prog .track{height:12px; border-radius:8px; background:rgba(0,0,0,.4); border:1px solid rgba(255,255,255,.1); overflow:hidden}
+  .prog .fill{height:100%; width:0; background:linear-gradient(90deg, var(--lime-deep), var(--lime)); border-radius:8px; transition:width 1.2s cubic-bezier(.2,.8,.2,1); box-shadow:0 0 12px rgba(168,255,30,.6)}
+  .prog .lbl{display:flex; justify-content:space-between; gap:12px; margin-top:8px; font-family:var(--hud); font-size:.74rem; letter-spacing:.1em; text-transform:uppercase; color:var(--mute)}
+  .prog .lbl b{color:var(--cloud); font-weight:600}
+
+  /* players: heading only, the footage shows the cast */
+  #players .card{background:transparent; border:0; backdrop-filter:none; -webkit-backdrop-filter:none; box-shadow:none; padding:0; max-width:900px}
+  #players .lede{margin:0 auto; text-shadow:0 1px 10px rgba(0,0,0,.5); color:var(--cloud)}
+  @media (max-height: 700px){
+    #players h2{font-size:clamp(1.8rem, 5vw, 2.8rem)}
+    #players .lede{font-size:.92rem}
+  }
+
+  /* compact cards when the window is short, so nothing gets cut off */
+  @media (max-height: 720px){
+    .card{padding:18px 20px; border-radius:22px}
+    h2{font-size:clamp(1.7rem, 4.5vw, 2.6rem); margin-bottom:8px}
+    .lede{font-size:.9rem; margin-bottom:14px}
+    .ach{gap:8px}
+    .ach li{padding:10px 12px; gap:12px}
+    .ach .badge{width:40px; height:40px; font-size:1.2rem}
+    .ach .txt{font-size:.92rem}
+    .prog{margin-top:12px}
+    .chart-frame{min-height:min(320px, 48vh)}
+  }
+
+  /* end: solid footer after the footage scrolls away */
+  .end{
+    position:relative; z-index:2;
+    background:linear-gradient(180deg, #2f6a1f 0, #17361a 22%, #0b1424 60%);
+    border-top:4px solid var(--lime);
+    padding:clamp(28px,5vw,56px) 20px calc(clamp(28px,5vw,56px) + 36px);
+    color:var(--mute);
+  }
+  .end .wrap{max-width:980px; margin:0 auto}
+  .disclaimer{font-size:.9rem; line-height:1.6; columns:2; column-gap:40px}
+  .disclaimer p{margin:0 0 10px; break-inside:avoid}
+  .end .eyebrow{margin-bottom:12px}
+  .foot{display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px 16px; margin-top:22px; padding-top:14px; border-top:1px solid rgba(255,255,255,.12); font-family:var(--hud); font-size:.72rem; letter-spacing:.1em; text-transform:uppercase}
+  .foot a{text-decoration:none; color:var(--lime)}
+  .foot a:hover{text-decoration:underline}
+  @media (max-width: 760px){ .disclaimer{columns:1} }
+
+  /* ---------- phones: no scrubbed video; the same levels stacked as a page, sky to city to field ---------- */
+  @media (max-width: 820px){
+    .scroller{height:auto}
+    .stage{position:static; height:auto; overflow:visible; background:none}
+    .stage video, .stage::after{display:none}
+    .scene{
+      position:relative; inset:auto; z-index:auto; opacity:1; visibility:visible; transform:none; pointer-events:auto;
+      transition:none; align-content:center; padding:28px 16px;
+      background-size:cover; background-position:center;
+    }
+    #hero{
+      min-height:100vh; min-height:100svh; align-content:start; padding-top:72px;
+      background-image:url(assets/m/sky.jpg); background-position:center top;
+    }
+    #hero .hint{font-size:.72rem; flex-direction:column; height:auto; gap:8px}
+    #hero .logo{
+      display:block; width:min(86vw, 440px); height:auto; margin:7vh auto 0;
+      filter:drop-shadow(0 18px 28px rgba(10,40,80,.35));
+      animation:hover 4s ease-in-out infinite;
+    }
+    @keyframes hover{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+    #ca{background-image:url(assets/m/sky.jpg); background-position:center bottom; padding:8px 16px 44px}
+    #chart{background-image:url(assets/m/city.jpg); background-position:center top; padding:44px 16px 24px}
+    #quests{background-image:url(assets/m/city.jpg); background-position:center bottom; padding:24px 16px 44px}
+    #players{background-image:url(assets/m/field.jpg); padding:44px 16px 48px}
+    #players .card{text-align:center}
+    #players h2{margin-bottom:18px}
+    #players .grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:420px; margin:0 auto}
+    #players .grid figure{margin:0; border-radius:18px; overflow:hidden; border:2px solid #fff; box-shadow:0 10px 24px -10px rgba(0,0,0,.7); background:#9bb}
+    #players .grid img{display:block; width:100%; aspect-ratio:456/672; object-fit:cover}
+    .levels{display:none}
+    .chart-frame{min-height:min(420px, 60vh); max-height:none}
+    .end{padding-bottom:clamp(28px,5vw,56px)}
+  }
+
+  @media (max-width: 640px){
+    .hud{padding:12px 16px}
+    .wordmark{font-size:1.15rem}
+    .score .lbl{display:none}
+    .levels{gap:4px}
+    .levels span{font-size:0}
+    .levels span::before,.levels span::after{height:4px}
+    .scene{padding-left:16px; padding-right:16px}
+    .card{border-radius:22px}
+    .lede{font-size:.95rem}
+    .ach li{grid-template-columns:auto 1fr; gap:12px; padding:12px 14px}
+    .ach .badge{width:44px; height:44px; font-size:1.25rem}
+    .ach .state{grid-column:2; justify-self:start}
+    .ach li.unlocked::before{font-size:.8rem}
+    .ca-addr{font-size:.9rem}
+    .ca-box .btn{flex:1 1 auto}
+    #chart .head{padding:0 2px 12px}
+    .roster{gap:6px}
+    .roster figure{border-radius:12px}
+    .end{padding-left:16px; padding-right:16px}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .scene, .ach .txt::after, .prog .fill{transition:none}
+    #hero .hint, #hero .hint .key::after, .score .dot{animation:none}
+  }
+  :focus-visible{outline:3px solid #fff; outline-offset:3px; border-radius:12px}
+</style>
+</head>
+<body>
+
+<header class="hud">
+  <a class="wordmark" href="#top" aria-label="LIFE, back to top">$LIFE</a>
+  <div class="score" role="status" aria-live="polite">
+    <span class="dot" aria-hidden="true"></span>
+    <span class="lbl" id="score-lbl">Loading</span>
+    <span class="val" id="score-val">—</span>
+  </div>
+</header>
+
+<div class="scroller" id="scroller">
+<div class="stage" id="top">
+  <video id="bg" muted playsinline preload="auto" tabindex="-1" aria-hidden="true"></video>
+
+  <!-- data-in / data-out are seconds of footage; each scene sits where the frame is empty then -->
+  <section id="hero" class="scene" data-in="0" data-out="1.8" aria-label="Life is a game">
+    <div class="hint" aria-hidden="true"><span class="key"></span>Scroll to play</div>
+    <img class="logo" src="assets/logo.png" alt="Life is a game" width="1024" height="1024">
+  </section>
+
+  <section id="ca" class="scene" data-in="3.2" data-out="5.2" data-in-short="3.6" data-in-portrait="3.6">
+    <div class="card">
+      <p class="eyebrow">Contract address</p>
+      <h2>Level 1: the CA</h2>
+      <p class="lede">One token. Robinhood Chain. Copy it, check it twice, and play.</p>
+      <div class="ca-box">
+        <div class="ca-addr" id="ca-text">0xac0aEBF8a26E46DeD45e348A8A69B61B282F1e18</div>
+        <button class="btn" id="copy-btn" type="button">Copy CA</button>
+      </div>
+      <div class="meta"><span>Ticker <b>$LIFE</b></span><span>Chain <b>Robinhood</b></span><span>Pair <b>LIFE / TTWO</b></span><span>DEX <b>Uniswap</b></span><a href="https://dexscreener.com/robinhood/0x14341221436285824e39986b99a058fde5372db42f9fdd3a5ee3ddbe00d15ebb" target="_blank" rel="noopener">DexScreener ↗</a></div>
+    </div>
+  </section>
+
+  <section id="chart" class="scene" data-in="5.5" data-out="6.6">
+    <div class="card">
+      <div class="head">
+        <div>
+          <p class="eyebrow">Live chart</p>
+          <h2>Level 2: the chart</h2>
+        </div>
+        <div class="meta"><span>Paired with <b>TTWO</b>. Yes, that Take-Two.</span></div>
+      </div>
+      <div class="chart-frame">
+        <iframe id="dex" title="LIFE/TTWO chart on DexScreener" allow="clipboard-write"
+          data-src="https://dexscreener.com/robinhood/0x14341221436285824e39986b99a058fde5372db42f9fdd3a5ee3ddbe00d15ebb?embed=1&loadChartSettings=0&trades=0&tabs=0&info=0&chartLeftToolbar=0&chartTheme=dark&theme=dark&chartStyle=1&chartType=usd&interval=15"></iframe>
+        <div class="fallback">Chart unavailable. <a href="https://dexscreener.com/robinhood/0x14341221436285824e39986b99a058fde5372db42f9fdd3a5ee3ddbe00d15ebb" target="_blank" rel="noopener">Open it on DexScreener ↗</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="quests" class="scene" data-in="6.6" data-out="7.8" data-out-short="7.3" data-out-portrait="7.4">
+    <div class="card">
+      <p class="eyebrow">Achievements</p>
+      <h2>Level 3: quest log</h2>
+      <p class="lede">Each one unlocks the moment market cap crosses the line. Tracked live from DexScreener.</p>
+      <ol class="ach" id="ach-list">
+        <li data-mc="500000">
+          <div class="badge" aria-hidden="true">😢</div>
+          <div><div class="mc">$500K market cap</div><div class="txt">Minh starts crying because we just flipped his portfolio.</div></div>
+          <div class="state">Locked</div>
+        </li>
+        <li data-mc="1000000">
+          <div class="badge" aria-hidden="true">🤯</div>
+          <div><div class="mc">$1M market cap</div><div class="txt">Minh completely loses it.</div></div>
+          <div class="state">Locked</div>
+        </li>
+        <li data-mc="2000000">
+          <div class="badge" aria-hidden="true">🏆</div>
+          <div><div class="mc">$2M market cap</div><div class="txt">We’ve officially flipped his whole Cyber League loss 😭</div></div>
+          <div class="state">Locked</div>
+        </li>
+      </ol>
+      <div class="prog" id="prog">
+        <div class="track"><div class="fill" id="prog-fill"></div></div>
+        <div class="lbl"><span>Now <b id="prog-now">—</b></span><span>Next <b id="prog-next">$500K</b></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="players" class="scene" data-in="8.4" data-out="99">
+    <div class="card">
+      <p class="eyebrow">Final level</p>
+      <h2>The players</h2>
+      <div class="grid" aria-label="The four players">
+        <figure><img src="assets/player-1.jpg" alt="Figurine in a navy suit with a Bitcoin lapel pin"></figure>
+        <figure><img src="assets/player-2.jpg" alt="Figurine in a grey tee holding a glowing Ethereum cube"></figure>
+        <figure><img src="assets/player-3.jpg" alt="Figurine in a black jacket pointing up"></figure>
+        <figure><img src="assets/player-4.jpg" alt="Figurine in a blue suit and red tie with flames around the hands"></figure>
+      </div>
+    </div>
+  </section>
+</div>
+</div>
+
+<footer class="end">
+  <div class="wrap">
+    <p class="eyebrow">Disclaimer</p>
+    <div class="disclaimer">
+      <p>$LIFE is a memecoin made for entertainment. It has no intrinsic value, no utility, no team promises, no roadmap, and no expectation of financial return. It's a game. Play with money you can afford to lose.</p>
+      <p>Nothing on this page is financial, legal, or tax advice. Crypto is volatile and you can lose everything. Always verify the contract address yourself before trading.</p>
+      <p>The characters shown are parody figurines. They are not affiliated with, sponsored by, or endorsed by any real person they may resemble. Minh is a good sport.</p>
+    </div>
+    <div class="foot">
+      <span>© <span id="year"></span> $LIFE · Life is a game</span>
+      <a href="#top">Back to start ↑</a>
+    </div>
+  </div>
+</footer>
+
+<nav class="levels" aria-label="Progress">
+  <span data-from="0" data-to="3.2">Start</span>
+  <span data-from="3.2" data-to="5.5">CA</span>
+  <span data-from="5.5" data-to="6.6">Chart</span>
+  <span data-from="6.6" data-to="7.8">Quests</span>
+  <span data-from="7.8" data-to="10">Players</span>
+</nav>
+
+<script>
+(() => {
+  // ---------- config ----------
+  const CA = '0xac0aEBF8a26E46DeD45e348A8A69B61B282F1e18';
+  const PAIR_API = 'https://api.dexscreener.com/latest/dex/tokens/' + CA;
+  // Achievements you want crossed out regardless of the live number (e.g. after an ATH): [500000, 1000000]
+  const MANUAL_UNLOCKED = [];
+  const REFRESH_MS = 60000;
+  const FPS = 48;                                  // frame rate of the footage files
+
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  // ---------- video: pick a size, fully buffer it, then scrub with scroll ----------
+  const video = document.getElementById('bg');
+  const scroller = document.getElementById('scroller');
+  const mobile = matchMedia('(max-width: 820px)').matches;   // phones get the stacked page, no scrubbed video
+  const portrait = matchMedia('(orientation: portrait)').matches;
+  const small = matchMedia('(max-width: 900px)').matches || (navigator.connection && navigator.connection.saveData);
+  const SRC = portrait ? 'assets/bg-portrait.mp4' : (small ? 'assets/bg-720.mp4' : 'assets/bg-1080.mp4');
+  video.poster = portrait ? 'assets/poster-portrait.jpg' : 'assets/poster.jpg';
+  const scoreLbl = document.getElementById('score-lbl');
+  const scoreVal = document.getElementById('score-val');
+  let duration = 10;
+  let videoReady = false;
+
+  function setLoading(p){
+    if (videoReady) return;
+    scoreLbl.textContent = 'Loading';
+    scoreVal.textContent = Math.round(p * 100) + '%';
+  }
+
+  async function loadVideo(){
+    let src = SRC;
+    try {
+      if (location.protocol === 'file:') throw new Error('file protocol');
+      const res = await fetch(SRC);
+      if (!res.ok || !res.body) throw new Error('fetch failed');
+      const total = +res.headers.get('content-length') || 0;
+      const reader = res.body.getReader();
+      const chunks = []; let got = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value); got += value.length;
+        if (total) setLoading(got / total);
+      }
+      src = URL.createObjectURL(new Blob(chunks, { type: 'video/mp4' }));
+    } catch (e) { /* fall back to streaming straight from the file */ }
+    video.src = src;
+    video.load();
+  }
+
+  const dex = document.getElementById('dex');
+  function loadChart(){ if (!dex.src) dex.src = dex.dataset.src; }
+
+  video.addEventListener('loadedmetadata', () => { if (isFinite(video.duration) && video.duration > 0) duration = video.duration; });
+  video.addEventListener('canplay', () => {
+    if (videoReady) return;
+    videoReady = true;
+    video.classList.add('ready');
+    lastFrame = -1;
+    renderScore();
+    setTimeout(loadChart, 800);                   // chart loads once the footage is in
+  }, { once: true });
+  video.addEventListener('error', () => { videoReady = true; renderScore(); loadChart(); });
+  if (mobile) {
+    videoReady = true;
+    document.querySelectorAll('.scene').forEach(s => s.classList.add('on'));
+    loadChart();
+  } else {
+    loadVideo();
+    setTimeout(loadChart, 12000);                 // never wait forever on a slow video
+  }
+
+  // iOS needs a play()/pause() handshake before it lets us seek freely.
+  const unlock = () => {
+    const p = video.play();
+    if (p && p.then) p.then(() => video.pause()).catch(() => {});
+    window.removeEventListener('touchstart', unlock);
+    window.removeEventListener('pointerdown', unlock);
+  };
+  window.addEventListener('touchstart', unlock, { passive: true });
+  window.addEventListener('pointerdown', unlock, { passive: true });
+
+  const progress = () => {
+    const max = scroller.offsetHeight - innerHeight;
+    return max > 0 ? Math.min(1, Math.max(0, scrollY / max)) : 0;
+  };
+  const targetT = () => progress() * duration;
+
+  // ---------- smooth wheel scrolling (mouse/trackpad only; touch keeps native momentum) ----------
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const smoothWheel = !mobile && !reduced && matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const maxScroll = () => Math.max(0, document.documentElement.scrollHeight - innerHeight);
+  let sTarget = scrollY, sCur = scrollY, sActive = false, progUntil = 0;
+  let lastFrame = -1;
+  function seek(t){
+    const f = Math.round(t * FPS);
+    if (f === lastFrame || video.seeking || video.readyState < 2) return;
+    lastFrame = f;
+    try { video.currentTime = f / FPS; } catch (e) {}
+  }
+  if (smoothWheel) {
+    addEventListener('wheel', e => {
+      if (e.ctrlKey || e.defaultPrevented) return;        // let pinch-zoom through
+      e.preventDefault();
+      let d = e.deltaY;
+      if (e.deltaMode === 1) d *= 40; else if (e.deltaMode === 2) d *= innerHeight;
+      d = Math.max(-140, Math.min(140, d)) * 0.55;         // heavier wheel: about 55px per notch
+      if (!sActive) { sTarget = sCur = scrollY; }
+      sTarget = Math.max(0, Math.min(maxScroll(), sTarget + d));
+      sActive = true;
+    }, { passive: false });
+    // scrollbar drags, keyboard, anchors: adopt the browser's position instead of fighting it
+    addEventListener('scroll', () => {
+      if (performance.now() > progUntil) { sTarget = sCur = scrollY; sActive = false; }
+    }, { passive: true });
+  }
+
+  // ---------- scenes and level tracker, both driven by footage time ----------
+  // short, wide windows crop the top and bottom of the frame, so some scenes wait a beat longer
+  const shortWin = !portrait && innerHeight <= 700;
+  const pick = (el, key) => {
+    const d = el.dataset;
+    if (portrait && d[key + 'Portrait'] != null) return +d[key + 'Portrait'];
+    if (shortWin && d[key + 'Short'] != null) return +d[key + 'Short'];
+    return +d[key];
+  };
+  const scenes = [...document.querySelectorAll('.scene')].map(el => ({ el, tin: pick(el, 'in'), tout: pick(el, 'out') }));
+  const levels = [...document.querySelectorAll('.levels span')].map(el => ({ el, a: +el.dataset.from, b: +el.dataset.to }));
+  let lastShown = -1;
+  function updateScenes(t){
+    const key = Math.round(t * 20);
+    if (key === lastShown) return;
+    lastShown = key;
+    for (const s of scenes) s.el.classList.toggle('on', t >= s.tin && t < s.tout);
+    for (const l of levels) {
+      const frac = Math.min(1, Math.max(0, (t - l.a) / (l.b - l.a)));
+      l.el.style.setProperty('--p', frac.toFixed(3));
+      l.el.classList.toggle('done', frac >= 1);
+      l.el.classList.toggle('live', frac > 0 && frac < 1);
+    }
+  }
+
+  // ---------- one frame loop: move the page, then move the footage ----------
+  let cur = 0;
+  function tick(){
+    if (mobile) return;                                    // nothing to scrub on the stacked page
+    if (sActive) {
+      sCur += (sTarget - sCur) * 0.07;                     // slow, heavy ease
+      if (Math.abs(sTarget - sCur) < 0.3) { sCur = sTarget; sActive = false; }
+      progUntil = performance.now() + 80;
+      scrollTo(0, Math.round(sCur));
+    }
+    const t = targetT();
+    cur += (t - cur) * 0.14;
+    if (Math.abs(t - cur) < 0.001) cur = t;
+    const clamped = Math.min(Math.max(cur, 0), duration - 0.03);
+    if (videoReady) seek(clamped);
+    updateScenes(clamped);
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ---------- copy CA ----------
+  const copyBtn = document.getElementById('copy-btn');
+  copyBtn.addEventListener('click', async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(CA); ok = true; }
+    catch (e) {
+      const r = document.createRange(); r.selectNodeContents(document.getElementById('ca-text'));
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      try { ok = document.execCommand('copy'); } catch (_) {}
+    }
+    copyBtn.textContent = ok ? 'Copied ✓' : 'Select & copy';
+    copyBtn.classList.toggle('copied', ok);
+    setTimeout(() => { copyBtn.textContent = 'Copy CA'; copyBtn.classList.remove('copied'); }, 1800);
+  });
+
+  // ---------- live market cap + achievements ----------
+  const fmt = n => {
+    if (!isFinite(n)) return '—';
+    if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+    if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+    if (n >= 1e3) return '$' + (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'K';
+    return '$' + Math.round(n);
+  };
+  const short = n => n >= 1e6 ? '$' + (n / 1e6) + 'M' : '$' + (n / 1e3) + 'K';
+  const items = [...document.querySelectorAll('#ach-list li')];
+  const tiers = items.map(li => +li.dataset.mc);
+  let mcap = NaN, high = 0;
+  try { high = +localStorage.getItem('life-high') || 0; } catch (e) {}
+
+  function renderScore(){
+    if (!videoReady) return;
+    scoreLbl.textContent = 'Market cap';
+    scoreVal.textContent = fmt(mcap);
+  }
+
+  function renderAchievements(){
+    const reached = Math.max(isFinite(mcap) ? mcap : 0, high, ...MANUAL_UNLOCKED.map(Number));
+    items.forEach(li => {
+      const hit = reached >= +li.dataset.mc;
+      li.classList.toggle('unlocked', hit);
+      li.querySelector('.state').textContent = hit ? 'Done ✓' : 'Locked';
+    });
+    const next = tiers.find(t => reached < t);
+    const prev = next ? (tiers[tiers.indexOf(next) - 1] || 0) : tiers[tiers.length - 1];
+    const now = isFinite(mcap) ? mcap : reached;
+    const frac = next ? Math.min(1, Math.max(0, (now - prev) / (next - prev))) : 1;
+    document.getElementById('prog-fill').style.width = (frac * 100).toFixed(1) + '%';
+    document.getElementById('prog-now').textContent = fmt(now);
+    document.getElementById('prog-next').textContent = next ? short(next) : 'All clear 🏁';
+  }
+
+  async function poll(){
+    try {
+      const res = await fetch(PAIR_API, { cache: 'no-store' });
+      const data = await res.json();
+      const pairs = (data.pairs || []).slice();
+      pairs.sort((a, b) => ((b.liquidity && b.liquidity.usd) || 0) - ((a.liquidity && a.liquidity.usd) || 0));
+      const best = pairs[0];
+      if (best) {
+        mcap = +(best.marketCap || best.fdv) || NaN;
+        if (isFinite(mcap) && mcap > high) { high = mcap; try { localStorage.setItem('life-high', String(high)); } catch (e) {} }
+      }
+    } catch (e) { /* keep last value */ }
+    renderScore();
+    renderAchievements();
+  }
+  renderAchievements();
+  poll();
+  setInterval(poll, REFRESH_MS);
+})();
+</script>
+</body>
+</html>
