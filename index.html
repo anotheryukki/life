@@ -66,7 +66,7 @@
     transition:opacity .5s cubic-bezier(.2,.7,.2,1), transform .5s cubic-bezier(.2,.7,.2,1), visibility 0s;
   }
   #hero{align-content:start; padding-top:18px}     /* the hint rides on the HUD line, between the wordmark and the score */
-  #hero .logo, #players .grid{display:none}
+  #hero .logo, #players .grid, .mbg{display:none}
   #ca{align-content:end; padding-bottom:6vh}
   #chart{align-content:start; padding-top:7vh}
   #quests{align-content:start; padding-top:6vh}
@@ -267,15 +267,18 @@
     .scroller{height:auto}
     .stage{position:static; height:auto; overflow:visible; background:none}
     .stage video, .stage::after{display:none}
+    /* one blurred city behind the whole page (a fixed layer, since fixed backgrounds misbehave on iOS) */
+    .mbg{
+      display:block; position:fixed; inset:0; z-index:0;
+      background:#3d6f9c url(assets/m/bg.jpg) center/cover no-repeat;
+    }
+    .mbg::after{content:""; position:absolute; inset:0; background:linear-gradient(to bottom, rgba(6,12,24,.08), rgba(6,12,24,.28))}
+    .scroller, .end{position:relative; z-index:1}
     .scene{
       position:relative; inset:auto; z-index:auto; opacity:1; visibility:visible; transform:none; pointer-events:auto;
       transition:none; align-content:center; padding:28px 16px;
-      background-size:cover; background-position:center;
     }
-    #hero{
-      min-height:100vh; min-height:100svh; align-content:start; padding-top:72px;
-      background-image:url(assets/m/sky.jpg); background-position:center top;
-    }
+    #hero{min-height:100vh; min-height:100svh; align-content:start; padding-top:72px}
     #hero .hint{font-size:.72rem; flex-direction:column; height:auto; gap:8px}
     #hero .logo{
       display:block; width:min(86vw, 440px); height:auto; margin:7vh auto 0;
@@ -283,10 +286,10 @@
       animation:hover 4s ease-in-out infinite;
     }
     @keyframes hover{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-    #ca{background-image:url(assets/m/sky.jpg); background-position:center bottom; padding:8px 16px 44px}
-    #chart{background-image:url(assets/m/city.jpg); background-position:center top; padding:44px 16px 24px}
-    #quests{background-image:url(assets/m/city.jpg); background-position:center bottom; padding:24px 16px 44px}
-    #players{background-image:url(assets/m/field.jpg); padding:44px 16px 48px}
+    #ca{padding:8px 16px 24px}
+    #chart{padding:24px 16px}
+    #quests{padding:24px 16px}
+    #players{padding:32px 16px 56px}
     #players .card{text-align:center}
     #players h2{margin-bottom:18px}
     #players .grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:420px; margin:0 auto}
@@ -336,6 +339,7 @@
   </div>
 </header>
 
+<div class="mbg" aria-hidden="true"></div>
 <div class="scroller" id="scroller">
 <div class="stage" id="top">
   <video id="bg" muted playsinline preload="auto" tabindex="-1" aria-hidden="true"></video>
