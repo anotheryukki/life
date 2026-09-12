@@ -181,9 +181,31 @@
     position:relative; width:100%; aspect-ratio:16/10; min-height:min(380px, 52vh); max-height:min(560px, 62vh);
     border-radius:18px; overflow:hidden; background:#0b0f18; border:1px solid rgba(255,255,255,.08);
   }
-  .chart-frame iframe{position:absolute; inset:0; width:100%; height:100%; border:0}
-  .chart-frame .fallback{position:absolute; inset:0; display:grid; place-items:center; color:var(--mute); font-family:var(--hud); font-size:.9rem; text-align:center; padding:20px}
-  .chart-frame iframe[src] + .fallback{display:none}
+  .chart-frame .plot{position:absolute; inset:0}
+  .chart-frame .fallback{position:absolute; inset:0; display:none; place-items:center; color:var(--mute); font-family:var(--hud); font-size:.9rem; text-align:center; padding:20px; background:#0b0f18}
+  .chart-frame.failed .fallback{display:grid}
+  .chart-frame .fallback a{color:var(--lime)}
+  .chart-frame .legend{
+    position:absolute; left:14px; top:12px; z-index:2; pointer-events:none;
+    font-family:var(--hud); font-size:.74rem; letter-spacing:.08em; text-transform:uppercase; color:var(--mute);
+    display:flex; flex-wrap:wrap; gap:4px 14px; align-items:baseline;
+  }
+  .chart-frame .legend b{color:var(--cloud); font-weight:700; font-size:1.05rem; letter-spacing:.02em; text-transform:none}
+  .chart-frame .legend .chg{font-weight:700}
+  .chart-frame .legend .chg.up{color:var(--lime)}
+  .chart-frame .legend .chg.down{color:#ff5c7a}
+  .chart-tools{display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; padding:12px 4px 0}
+  .seg{display:inline-flex; gap:4px; background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:4px}
+  .seg button{
+    appearance:none; border:0; background:transparent; color:var(--mute); cursor:pointer;
+    font-family:var(--hud); font-weight:700; font-size:.74rem; letter-spacing:.1em; text-transform:uppercase;
+    padding:7px 11px; border-radius:9px; transition:background .15s, color .15s;
+  }
+  .seg button:hover{color:var(--cloud)}
+  .seg button.active{background:var(--lime); color:var(--ink)}
+  .chart-src{font-family:var(--hud); font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:var(--mute); align-self:center}
+  .chart-src a{color:var(--lime); text-decoration:none}
+  .chart-src a:hover{text-decoration:underline}
 
   /* achievements */
   .ach{list-style:none; margin:0; padding:0; display:grid; gap:12px}
@@ -372,10 +394,23 @@
         </div>
         <div class="meta"><span>Paired with <b>TTWO</b>. Yes, that Take-Two.</span></div>
       </div>
-      <div class="chart-frame">
-        <iframe id="dex" title="LIFE/TTWO chart on DexScreener" allow="clipboard-write"
-          data-src="https://dexscreener.com/robinhood/0x14341221436285824e39986b99a058fde5372db42f9fdd3a5ee3ddbe00d15ebb?embed=1&loadChartSettings=0&trades=0&tabs=0&info=0&chartLeftToolbar=0&chartTheme=dark&theme=dark&chartStyle=1&chartType=usd&interval=15"></iframe>
-        <div class="fallback">Chart unavailable. <a href="https://dexscreener.com/robinhood/0x14341221436285824e39986b99a058fde5372db42f9fdd3a5ee3ddbe00d15ebb" target="_blank" rel="noopener">Open it on DexScreener ↗</a></div>
+      <div class="chart-frame" id="chart-frame">
+        <div class="legend" id="legend"><span id="lg-pair">LIFE / USD</span><b id="lg-val">—</b><span class="chg" id="lg-chg"></span></div>
+        <div class="plot" id="plot" role="img" aria-label="LIFE price chart"></div>
+        <div class="fallback">Chart data is unavailable right now. <a href="https://www.geckoterminal.com/robinhood/pools/0x14341221436285824e39986b99a058fde5372db42f9fdd3a5ee3ddbe00d15ebb" target="_blank" rel="noopener">Open it on GeckoTerminal ↗</a></div>
+      </div>
+      <div class="chart-tools">
+        <div class="seg" id="tf" role="group" aria-label="Timeframe">
+          <button type="button" data-tf="5m">5m</button>
+          <button type="button" data-tf="15m" class="active">15m</button>
+          <button type="button" data-tf="1h">1h</button>
+          <button type="button" data-tf="4h">4h</button>
+        </div>
+        <div class="seg" id="mode" role="group" aria-label="Scale">
+          <button type="button" data-mode="mcap" class="active">Mcap</button>
+          <button type="button" data-mode="price">Price</button>
+        </div>
+        <div class="chart-src">Candles by <a href="https://www.geckoterminal.com/robinhood/pools/0x14341221436285824e39986b99a058fde5372db42f9fdd3a5ee3ddbe00d15ebb" target="_blank" rel="noopener">GeckoTerminal</a></div>
       </div>
     </div>
   </section>
@@ -447,6 +482,7 @@
   <span data-from="7.8" data-to="10">Players</span>
 </nav>
 
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 (() => {
   // ---------- config ----------
@@ -499,9 +535,6 @@
     video.load();
   }
 
-  const dex = document.getElementById('dex');
-  function loadChart(){ if (!dex.src) dex.src = dex.dataset.src; }
-
   video.addEventListener('loadedmetadata', () => { if (isFinite(video.duration) && video.duration > 0) duration = video.duration; });
   video.addEventListener('canplay', () => {
     if (videoReady) return;
@@ -509,16 +542,13 @@
     video.classList.add('ready');
     lastFrame = -1;
     renderScore();
-    setTimeout(loadChart, 800);                   // chart loads once the footage is in
   }, { once: true });
-  video.addEventListener('error', () => { videoReady = true; renderScore(); loadChart(); });
+  video.addEventListener('error', () => { videoReady = true; renderScore(); });
   if (mobile) {
     videoReady = true;
     document.querySelectorAll('.scene').forEach(s => s.classList.add('on'));
-    loadChart();
   } else {
     loadVideo();
-    setTimeout(loadChart, 12000);                 // never wait forever on a slow video
   }
 
   // iOS needs a play()/pause() handshake before it lets us seek freely.
@@ -552,6 +582,7 @@
   if (smoothWheel) {
     addEventListener('wheel', e => {
       if (e.ctrlKey || e.defaultPrevented) return;        // let pinch-zoom through
+      if (e.target.closest && e.target.closest('.chart-frame')) return;   // the chart zooms itself
       e.preventDefault();
       let d = e.deltaY;
       if (e.deltaMode === 1) d *= 40; else if (e.deltaMode === 2) d *= innerHeight;
@@ -637,8 +668,9 @@
   const short = n => n >= 1e6 ? '$' + (n / 1e6) + 'M' : '$' + (n / 1e3) + 'K';
   const items = [...document.querySelectorAll('#ach-list li')];
   const tiers = items.map(li => +li.dataset.mc);
-  let mcap = NaN, high = 0;
+  let mcap = NaN, high = 0, supply = NaN;
   try { high = +localStorage.getItem('life-high') || 0; } catch (e) {}
+  try { supply = +localStorage.getItem('life-supply') || NaN; } catch (e) {}
 
   function renderScore(){
     if (!videoReady) return;
@@ -671,13 +703,95 @@
       const best = pairs[0];
       if (best) {
         mcap = +(best.marketCap || best.fdv) || NaN;
+        const px = +best.priceUsd;
+        if (isFinite(mcap) && px > 0) { supply = mcap / px; try { localStorage.setItem('life-supply', String(supply)); } catch (e) {} }
         if (isFinite(mcap) && mcap > high) { high = mcap; try { localStorage.setItem('life-high', String(high)); } catch (e) {} }
       }
     } catch (e) { /* keep last value */ }
     renderScore();
     renderAchievements();
+    if (chartApi) chartApi.rescale();
   }
   renderAchievements();
+
+  // ---------- the chart: LIFE candles from GeckoTerminal, drawn here ----------
+  const POOL = 'robinhood/pools/0x14341221436285824e39986b99a058fde5372db42f9fdd3a5ee3ddbe00d15ebb';
+  const TF = { '5m': ['minute', 5], '15m': ['minute', 15], '1h': ['hour', 1], '4h': ['hour', 4] };
+  const frame = document.getElementById('chart-frame');
+  let chartApi = null;
+
+  function buildChart(){
+    const LW = window.LightweightCharts;
+    if (!LW) { frame.classList.add('failed'); return null; }
+    const plot = document.getElementById('plot');
+    const lgVal = document.getElementById('lg-val'), lgChg = document.getElementById('lg-chg'), lgPair = document.getElementById('lg-pair');
+    let tf = '15m', mode = 'mcap', raw = [];
+    const fmtPrice = v => v >= 1 ? '$' + v.toFixed(2) : '$' + v.toPrecision(4);
+    const fmtVal = v => (mode === 'mcap' && isFinite(supply)) ? fmt(v) : fmtPrice(v);
+    const chart = LW.createChart(plot, {
+      autoSize: true,
+      layout: { background: { type: 'solid', color: '#0b0f18' }, textColor: 'rgba(244,248,255,.55)', fontFamily: 'Chakra Petch, Segoe UI, sans-serif', fontSize: 11 },
+      grid: { vertLines: { color: 'rgba(255,255,255,.05)' }, horzLines: { color: 'rgba(255,255,255,.05)' } },
+      rightPriceScale: { borderColor: 'rgba(255,255,255,.1)', scaleMargins: { top: 0.28, bottom: 0.22 } },
+      timeScale: { borderColor: 'rgba(255,255,255,.1)', timeVisible: true, secondsVisible: false, rightOffset: 4 },
+      crosshair: { mode: LW.CrosshairMode.Normal, vertLine: { color: 'rgba(168,255,30,.35)', labelBackgroundColor: '#5f9a12' }, horzLine: { color: 'rgba(168,255,30,.35)', labelBackgroundColor: '#5f9a12' } },
+      localization: { priceFormatter: v => v < 0 ? '' : fmtVal(v) },
+      handleScale: { axisPressedMouseMove: true }, handleScroll: true,
+    });
+    const candles = chart.addCandlestickSeries({
+      upColor: '#a8ff1e', downColor: '#ff5c7a', borderUpColor: '#a8ff1e', borderDownColor: '#ff5c7a',
+      wickUpColor: '#a8ff1e', wickDownColor: '#ff5c7a',
+      priceFormat: { type: 'custom', formatter: v => fmtVal(v), minMove: 1e-9 },
+    });
+    const volume = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol', lastValueVisible: false, priceLineVisible: false });
+    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
+
+    function factor(){ return mode === 'mcap' && isFinite(supply) ? supply : 1; }
+    function render(){
+      const f = factor();
+      candles.setData(raw.map(c => ({ time: c.t, open: c.o * f, high: c.h * f, low: c.l * f, close: c.c * f })));
+      volume.setData(raw.map(c => ({ time: c.t, value: c.v, color: c.c >= c.o ? 'rgba(168,255,30,.25)' : 'rgba(255,92,122,.25)' })));
+      lgPair.textContent = (f !== 1 ? 'LIFE market cap' : 'LIFE / USD') + ' · ' + tf;
+      if (raw.length) {
+        const last = raw[raw.length - 1];
+        const first = raw.find(c => c.t >= last.t - 86400) || raw[0];
+        lgVal.textContent = fmtVal(last.c * f);
+        const chg = (last.c - first.o) / first.o * 100;
+        lgChg.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(1) + '% 24h';
+        lgChg.className = 'chg ' + (chg >= 0 ? 'up' : 'down');
+      }
+    }
+    async function load(fit){
+      const [unit, agg] = TF[tf];
+      try {
+        const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/${POOL}/ohlcv/${unit}?aggregate=${agg}&limit=300&token=quote`, { headers: { Accept: 'application/json' } });
+        const data = await res.json();
+        const list = (data.data && data.data.attributes && data.data.attributes.ohlcv_list) || [];
+        raw = list.map(r => ({ t: r[0], o: r[1], h: r[2], l: r[3], c: r[4], v: r[5] })).sort((a, b) => a.t - b.t);
+        if (!raw.length) throw new Error('empty');
+        frame.classList.remove('failed');
+        render();
+        if (fit) chart.timeScale().fitContent();
+      } catch (e) { if (!raw.length) frame.classList.add('failed'); }
+    }
+    document.getElementById('tf').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      tf = b.dataset.tf;
+      [...b.parentNode.children].forEach(x => x.classList.toggle('active', x === b));
+      load(true);
+    });
+    document.getElementById('mode').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      mode = b.dataset.mode;
+      [...b.parentNode.children].forEach(x => x.classList.toggle('active', x === b));
+      render();
+    });
+    load(true);
+    setInterval(() => load(false), REFRESH_MS);
+    return { rescale: render };
+  }
+  chartApi = buildChart();
+
   poll();
   setInterval(poll, REFRESH_MS);
 })();
