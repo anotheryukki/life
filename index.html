@@ -208,7 +208,15 @@
   .chart-src a:hover{text-decoration:underline}
 
   /* quest log: one fluid bar, three milestone tiles */
-  #quests .card{max-width:800px}
+  #quests .card{
+    max-width:800px;
+    max-height:min(640px, 80vh, 80svh);
+    overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+    scrollbar-width:thin; scrollbar-color:rgba(168,255,30,.55) rgba(255,255,255,.08);
+  }
+  #quests .card::-webkit-scrollbar{width:8px}
+  #quests .card::-webkit-scrollbar-track{background:rgba(255,255,255,.06); border-radius:999px}
+  #quests .card::-webkit-scrollbar-thumb{background:rgba(168,255,30,.55); border-radius:999px}
   .bar{position:relative; margin:10px 0 0; padding-bottom:30px}
   .bar .track{
     position:relative; height:20px; border-radius:999px;
@@ -259,7 +267,6 @@
     font-family:var(--hud); font-weight:700; font-size:.7rem; letter-spacing:.14em; text-transform:uppercase; color:var(--mute);
     transition:color .5s;
   }
-  .bar .mark:last-of-type b{transform:translateX(-30%)}
   .bar .mark.hit i{background:var(--lime); border-color:#fff; transform:scale(1.25); box-shadow:0 0 0 3px rgba(11,20,36,.7), 0 0 14px rgba(168,255,30,.9)}
   .bar .mark.hit b{color:var(--lime); text-shadow:0 0 10px rgba(168,255,30,.5)}
   .bar .lbl{display:flex; justify-content:space-between; gap:12px; margin-top:34px; font-family:var(--hud); font-size:.74rem; letter-spacing:.1em; text-transform:uppercase; color:var(--mute)}
@@ -360,6 +367,7 @@
     #ca{padding:8px 16px 24px}
     #chart{padding:24px 16px}
     #quests{padding:24px 16px}
+    #quests .card{max-height:none; overflow-y:visible}
     #players{padding:32px 16px 56px}
     #players .card{text-align:center}
     #players h2{margin-bottom:18px}
@@ -478,12 +486,12 @@
         <div class="track">
           <div class="fill" id="bar-fill"></div>
           <span class="head" id="bar-head" aria-hidden="true"></span>
-          <div class="mark" style="--x:5%" data-mc="100000"><i></i><b>$100K</b></div>
-          <div class="mark" style="--x:12.5%" data-mc="250000"><i></i><b>$250K</b></div>
-          <div class="mark" style="--x:25%" data-mc="500000"><i></i><b>$500K</b></div>
-          <div class="mark" style="--x:37.5%" data-mc="750000"><i></i><b>$750K</b></div>
-          <div class="mark" style="--x:50%" data-mc="1000000"><i></i><b>$1M</b></div>
-          <div class="mark" style="--x:100%" data-mc="2000000"><i></i><b>$2M</b></div>
+          <div class="mark" style="--x:4%" data-mc="100000"><i></i><b>$100K</b></div>
+          <div class="mark" style="--x:10%" data-mc="250000"><i></i><b>$250K</b></div>
+          <div class="mark" style="--x:20%" data-mc="500000"><i></i><b>$500K</b></div>
+          <div class="mark" style="--x:30%" data-mc="750000"><i></i><b>$750K</b></div>
+          <div class="mark" style="--x:40%" data-mc="1000000"><i></i><b>$1M</b></div>
+          <div class="mark" style="--x:80%" data-mc="2000000"><i></i><b>$2M</b></div>
         </div>
         <div class="lbl"><span>Now <b id="bar-now">—</b></span><span>Next <b id="bar-next">$100K</b></span></div>
       </div>
@@ -734,7 +742,10 @@
     tiles.forEach(t => t.classList.toggle('unlocked', reached >= +t.dataset.mc));
     marks.forEach(m => m.classList.toggle('hit', reached >= +m.dataset.mc));
     const floor = tiers.filter(t => reached >= t).pop() || 0;   // never drain below the last milestone hit
-    const frac = Math.min(1, Math.max(0, Math.max(now, floor) / TOP));
+    const basis = Math.max(now, floor);
+    const BAR_CAP = 0.8;   // $2M mark sits at 80% of the track, leaving room to keep climbing past it
+    let frac = basis <= TOP ? (basis / TOP) * BAR_CAP : 1 - (1 - BAR_CAP) * (TOP / basis);
+    frac = Math.min(1, Math.max(0, frac));
     document.getElementById('bar-fill').style.width = (frac * 100).toFixed(2) + '%';
     document.getElementById('bar-head').style.setProperty('--fill', frac.toFixed(4));
     const next = tiers.find(t => reached < t);
